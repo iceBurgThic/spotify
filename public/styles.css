@@ -203,6 +203,10 @@ form,
   gap: 14px;
 }
 
+.markdown-output > button {
+  justify-self: start;
+}
+
 .markdown-output h3 {
   margin: 0 0 8px;
   font-size: 0.95rem;

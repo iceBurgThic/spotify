@@ -9,6 +9,7 @@ const discoverForm = document.querySelector('#discover-form');
 const discoverOutput = document.querySelector('#discover-output');
 
 const selected = new Map();
+let latestDiscoverySeeds = [];
 
 await refreshStatus();
 renderSelected();
@@ -40,6 +41,7 @@ discoverForm.addEventListener('submit', async (event) => {
       method: 'POST',
       body: JSON.stringify({ query, length }),
     });
+    latestDiscoverySeeds = data.seeds || [];
     renderDiscovery(data);
   } catch (error) {
     discoverOutput.textContent = error.message;
@@ -118,9 +120,17 @@ function renderDiscovery(data) {
   if (data.generate_stdout) sections.push(['Run Log', data.generate_stdout]);
 
   discoverOutput.className = 'markdown-output';
-  discoverOutput.innerHTML = sections.map(([title, text]) => {
+  const seedButton = latestDiscoverySeeds.length
+    ? '<button id="use-shortlist-seeds" type="button">Use shortlist as seeds</button>'
+    : '';
+  discoverOutput.innerHTML = seedButton + sections.map(([title, text]) => {
     return `<section><h3>${escapeHtml(title)}</h3><pre>${escapeHtml(text.trim() || 'No output.')}</pre></section>`;
   }).join('');
+
+  document.querySelector('#use-shortlist-seeds')?.addEventListener('click', () => {
+    document.querySelector('#discover-query').value = latestDiscoverySeeds.join('\n');
+    document.querySelector('#discover-query').focus();
+  });
 }
 
 function trackRow(track, action, onClick) {

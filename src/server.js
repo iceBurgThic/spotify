@@ -218,6 +218,7 @@ async function discover(req, res) {
     readOptional(path.join(root, 'output', 'bridge_sources.md')),
     readOptional(path.join(root, 'output', 'unresolved_interesting.md')),
   ]);
+  const seeds = await readPlaylistSeeds(path.join(root, 'output', 'final_playlist.json'));
 
   const response = {
     bridge_stdout: bridge.stdout,
@@ -225,6 +226,7 @@ async function discover(req, res) {
     playlist,
     sources,
     unresolved,
+    seeds,
   };
   try {
     rmSync(dbPath, { force: true });
@@ -287,6 +289,19 @@ async function readOptional(filePath) {
     return await readFile(filePath, 'utf8');
   } catch {
     return '';
+  }
+}
+
+async function readPlaylistSeeds(filePath) {
+  try {
+    const items = JSON.parse(await readFile(filePath, 'utf8'));
+    if (!Array.isArray(items)) return [];
+    return items
+      .map((item) => `${item.artist} - ${item.title}`.trim())
+      .filter((item) => item && !item.startsWith(' - '))
+      .slice(0, 12);
+  } catch {
+    return [];
   }
 }
 
