@@ -46,6 +46,23 @@
         </section>
       </section>
 
+      <section class="panel discovery-panel">
+        <form id="discover-form" class="discover">
+          <label>
+            Discovery search
+            <textarea id="discover-query" rows="5" placeholder="Sister Nancy - Bam Bam&#10;Freddie Gibbs - Andrea&#10;https://soundcloud.com/..."></textarea>
+          </label>
+          <div class="actions">
+            <label>
+              Length
+              <input id="discover-length" type="number" min="5" max="60" value="30">
+            </label>
+            <button type="submit">Discover</button>
+          </div>
+        </form>
+        <div id="discover-output" class="markdown-output empty">No discovery run yet.</div>
+      </section>
+
       <section class="panel">
         <div class="section-head">
           <h2>Tracks to add</h2>

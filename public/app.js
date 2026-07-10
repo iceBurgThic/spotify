@@ -5,6 +5,8 @@ const searchForm = document.querySelector('#search-form');
 const playlistForm = document.querySelector('#playlist-form');
 const createResult = document.querySelector('#create-result');
 const clearButton = document.querySelector('#clear');
+const discoverForm = document.querySelector('#discover-form');
+const discoverOutput = document.querySelector('#discover-output');
 
 const selected = new Map();
 
@@ -22,6 +24,25 @@ searchForm.addEventListener('submit', async (event) => {
     renderResults(data.tracks.items);
   } catch (error) {
     resultsEl.textContent = error.message;
+  }
+});
+
+discoverForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const query = document.querySelector('#discover-query').value.trim();
+  const length = Number(document.querySelector('#discover-length').value || 30);
+  if (!query) return;
+
+  discoverOutput.className = 'markdown-output empty';
+  discoverOutput.textContent = 'Discovering...';
+  try {
+    const data = await api('/api/discover', {
+      method: 'POST',
+      body: JSON.stringify({ query, length }),
+    });
+    renderDiscovery(data);
+  } catch (error) {
+    discoverOutput.textContent = error.message;
   }
 });
 
@@ -87,6 +108,19 @@ function renderSelected() {
       renderSelected();
     }));
   }
+}
+
+function renderDiscovery(data) {
+  const sections = [];
+  if (data.playlist) sections.push(['Shortlist', data.playlist]);
+  if (data.sources) sections.push(['Bridge Sources', data.sources]);
+  if (data.unresolved) sections.push(['Unresolved', data.unresolved]);
+  if (data.generate_stdout) sections.push(['Run Log', data.generate_stdout]);
+
+  discoverOutput.className = 'markdown-output';
+  discoverOutput.innerHTML = sections.map(([title, text]) => {
+    return `<section><h3>${escapeHtml(title)}</h3><pre>${escapeHtml(text.trim() || 'No output.')}</pre></section>`;
+  }).join('');
 }
 
 function trackRow(track, action, onClick) {

@@ -115,39 +115,40 @@ def candidate_sources(seeds: list[dict], source_urls: list[str], files: list[str
             seen.add(key)
             sources.append(SourceConfig(name=f"bridge_text_{index}", platform="manual", source_type="manual_seed", url=text, weight=3.0, category="pasted_text"))
 
-    try:
-        client = SpotifyClient()
-        for seed in sorted(seeds, key=lambda item: len(item["value"]), reverse=True):
-            for playlist in client.search_playlists(seed["value"], limit=max(1, min(search_limit, 10))):
-                external = (playlist.get("external_urls") or {}).get("spotify")
-                if not external or external in seen:
-                    continue
-                seen.add(external)
-                name = slug(f"bridge_spotify_{playlist.get('name') or 'playlist'}_{playlist.get('id')}")
-                sources.append(SourceConfig(name=name, platform="spotify", source_type="spotify_playlist", url=external, weight=2.0, category="structured_api"))
-    except Exception as exc:
-        notes.append(f"Spotify playlist candidate search unavailable: {exc}")
+    if search_limit > 0:
+        try:
+            client = SpotifyClient()
+            for seed in sorted(seeds, key=lambda item: len(item["value"]), reverse=True):
+                for playlist in client.search_playlists(seed["value"], limit=max(1, min(search_limit, 10))):
+                    external = (playlist.get("external_urls") or {}).get("spotify")
+                    if not external or external in seen:
+                        continue
+                    seen.add(external)
+                    name = slug(f"bridge_spotify_{playlist.get('name') or 'playlist'}_{playlist.get('id')}")
+                    sources.append(SourceConfig(name=name, platform="spotify", source_type="spotify_playlist", url=external, weight=2.0, category="structured_api"))
+        except Exception as exc:
+            notes.append(f"Spotify playlist candidate search unavailable: {exc}")
 
-    try:
-        for query in bridge_queries(seeds):
-            for playlist in search_soundcloud_playlists(query, limit=search_limit):
-                external = playlist.get("permalink_url")
-                if not external or external in seen:
-                    continue
-                seen.add(external)
-                name = slug(f"bridge_soundcloud_{playlist.get('title') or playlist.get('id')}")
-                sources.append(
-                    SourceConfig(
-                        name=name,
-                        platform="soundcloud",
-                        source_type="soundcloud_playlist",
-                        url=external,
-                        weight=2.4,
-                        category="structured_api",
+        try:
+            for query in bridge_queries(seeds):
+                for playlist in search_soundcloud_playlists(query, limit=search_limit):
+                    external = playlist.get("permalink_url")
+                    if not external or external in seen:
+                        continue
+                    seen.add(external)
+                    name = slug(f"bridge_soundcloud_{playlist.get('title') or playlist.get('id')}")
+                    sources.append(
+                        SourceConfig(
+                            name=name,
+                            platform="soundcloud",
+                            source_type="soundcloud_playlist",
+                            url=external,
+                            weight=2.4,
+                            category="structured_api",
+                        )
                     )
-                )
-    except Exception as exc:
-        notes.append(f"SoundCloud playlist candidate search unavailable: {exc}")
+        except Exception as exc:
+            notes.append(f"SoundCloud playlist candidate search unavailable: {exc}")
 
     return sources, notes
 

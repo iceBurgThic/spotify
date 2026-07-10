@@ -44,6 +44,10 @@ body {
   margin-bottom: 20px;
 }
 
+.discovery-panel {
+  margin-bottom: 20px;
+}
+
 h1,
 h2,
 p {
@@ -133,6 +137,14 @@ form,
   width: auto;
 }
 
+.actions {
+  display: grid;
+  grid-template-columns: minmax(90px, 140px) auto;
+  gap: 12px;
+  align-items: end;
+  justify-content: start;
+}
+
 .section-head {
   grid-template-columns: 1fr auto;
   align-items: center;
@@ -185,6 +197,30 @@ form,
   color: var(--muted);
 }
 
+.markdown-output {
+  margin-top: 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.markdown-output h3 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+
+.markdown-output pre {
+  margin: 0;
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--text);
+  font: 0.82rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+}
+
 code {
   font-size: 0.9em;
 }
@@ -193,6 +229,10 @@ code {
   .topbar,
   .workspace,
   .search {
+    grid-template-columns: 1fr;
+  }
+
+  .actions {
     grid-template-columns: 1fr;
   }
 }

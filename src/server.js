@@ -1,14 +1,17 @@
 import http from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
 const publicDir = path.join(root, 'public');
 const tokenPath = path.join(root, '.spotify-token.json');
+const runFile = promisify(execFile);
 
 loadEnv(path.join(root, '.env'));
 
@@ -68,6 +71,9 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && url.pathname === '/api/playlists') {
       return createPlaylist(req, res);
+    }
+    if (req.method === 'POST' && url.pathname === '/api/discover') {
+      return discover(req, res);
     }
 
     return json(res, 404, { error: 'Not found.' });
@@ -163,6 +169,125 @@ async function createPlaylist(req, res) {
   }
 
   return json(res, 201, playlist);
+}
+
+async function discover(req, res) {
+  const body = await readJson(req);
+  const input = String(body.query || '').trim();
+  const length = Math.max(5, Math.min(Number(body.length || 30), 60));
+  if (!input) return json(res, 400, { error: 'Missing discovery query.' });
+
+  const parsed = parseDiscoveryInput(input);
+  if (parsed.seeds.length < 2 && parsed.urls.length === 0 && !parsed.text) {
+    return json(res, 400, { error: 'Use at least two seeds, URLs, or pasted tracklist text.' });
+  }
+
+  const dbPath = path.join('/tmp', `qrator-gui-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.sqlite`);
+  const seedArgs = parsed.seeds.length >= 2 ? parsed.seeds : ['source blend', 'manual sources'];
+  const bridgeArgs = [
+    '-m',
+    'music_harvester.main',
+    '--db',
+    dbPath,
+    'bridge-discover',
+    parsed.seedType,
+    ...seedArgs,
+    '--search-limit',
+    parsed.seeds.length >= 2 ? '10' : '0',
+  ];
+  for (const sourceUrl of parsed.urls) bridgeArgs.push('--source-url', sourceUrl);
+  if (parsed.text) bridgeArgs.push('--text', parsed.text);
+
+  const generateArgs = [
+    '-m',
+    'music_harvester.main',
+    '--db',
+    dbPath,
+    'generate',
+    '--mode',
+    parsed.seeds.length >= 2 ? 'bridge_discovery' : 'balanced_discovery',
+    '--length',
+    String(length),
+  ];
+
+  const bridge = await runPython(bridgeArgs);
+  const generated = await runPython(generateArgs);
+
+  const [playlist, sources, unresolved] = await Promise.all([
+    readOptional(path.join(root, 'output', 'final_playlist.md')),
+    readOptional(path.join(root, 'output', 'bridge_sources.md')),
+    readOptional(path.join(root, 'output', 'unresolved_interesting.md')),
+  ]);
+
+  const response = {
+    bridge_stdout: bridge.stdout,
+    generate_stdout: generated.stdout,
+    playlist,
+    sources,
+    unresolved,
+  };
+  try {
+    rmSync(dbPath, { force: true });
+  } catch {}
+  return json(res, 200, response);
+}
+
+function parseDiscoveryInput(input) {
+  const lines = input.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const urls = [];
+  const seeds = [];
+  const textLines = [];
+
+  for (const line of lines) {
+    if (/^https?:\/\//i.test(line)) {
+      urls.push(line);
+      continue;
+    }
+    textLines.push(line);
+    if (looksLikeTrack(line)) seeds.push(line);
+  }
+
+  if (seeds.length >= 2) {
+    return { seedType: '--tracks', seeds: seeds.slice(0, 4), urls, text: textLines.join('\n') };
+  }
+
+  const artistSeeds = lines
+    .filter((line) => !/^https?:\/\//i.test(line))
+    .flatMap((line) => line.split(/\s+[+&]\s+|,\s*/))
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return {
+    seedType: '--artists',
+    seeds: artistSeeds.slice(0, 4),
+    urls,
+    text: textLines.join('\n'),
+  };
+}
+
+function looksLikeTrack(line) {
+  return /\s[-–—:]\s/.test(line) || /\sby\s/i.test(line);
+}
+
+async function runPython(args) {
+  try {
+    return await runFile('python', args, {
+      cwd: root,
+      timeout: 180_000,
+      maxBuffer: 1024 * 1024 * 8,
+    });
+  } catch (error) {
+    const detail = [error.stdout, error.stderr, error.message].filter(Boolean).join('\n');
+    throw new Error(detail || 'Discovery command failed.');
+  }
+}
+
+async function readOptional(filePath) {
+  try {
+    return await readFile(filePath, 'utf8');
+  } catch {
+    return '';
+  }
 }
 
 async function spotifyProxy(res, url) {
