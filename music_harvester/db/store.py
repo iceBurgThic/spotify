@@ -38,6 +38,9 @@ class Store:
                 "normalization_confidence": "real not null default 1.0",
                 "spotify_resolution_confidence": "real not null default 0.0",
             },
+            "bridge_sources": {
+                "seed_sides_json": "text not null default '[]'",
+            },
         }
         for table, columns in migrations.items():
             existing = {row["name"] for row in self.conn.execute(f"pragma table_info({table})").fetchall()}
@@ -179,6 +182,8 @@ class Store:
               max(rt.spotify_resolution_confidence) as spotify_resolution_confidence,
               coalesce(max(bs.confidence_score), 0) as bridge_source_score,
               group_concat(distinct bs.match_type) as bridge_match_types,
+              group_concat(distinct bs.seed_sides_json) as bridge_seed_sides_json,
+              max(case when bs.match_type in ('exact_all_seeds', 'exact_some_seeds', 'near_bridge') then 1 else 0 end) as has_strong_bridge_match,
               sum(s.weight) as source_weight,
               count(distinct s.id) as source_count,
               count(distinct s.platform) as platform_count
@@ -208,6 +213,7 @@ class Store:
                 why="",
                 bridge_source_score=float(row["bridge_source_score"] or 0),
                 bridge_match_types=_csv(row["bridge_match_types"]),
+                bridge_seed_sides=_json_list_csv(row["bridge_seed_sides_json"]) if int(row["has_strong_bridge_match"] or 0) else [],
                 extraction_confidence=float(row["extraction_confidence"] or 1.0),
                 normalization_confidence=float(row["normalization_confidence"] or 1.0),
                 spotify_resolution_confidence=float(row["spotify_resolution_confidence"] or 0.0),
@@ -252,15 +258,16 @@ class Store:
         match_type: str,
         confidence_score: float,
         matched_seeds: list[str],
+        seed_sides: list[str] | None = None,
         notes: str | None = None,
     ) -> None:
         self.conn.execute(
             """
             insert into bridge_sources (
-              bridge_run_id, source_id, match_type, confidence_score, matched_seeds_json, notes
-            ) values (?, ?, ?, ?, ?, ?)
+              bridge_run_id, source_id, match_type, confidence_score, matched_seeds_json, seed_sides_json, notes
+            ) values (?, ?, ?, ?, ?, ?, ?)
             """,
-            (bridge_run_id, source_id, match_type, confidence_score, json.dumps(matched_seeds), notes),
+            (bridge_run_id, source_id, match_type, confidence_score, json.dumps(matched_seeds), json.dumps(seed_sides or []), notes),
         )
         self.conn.commit()
 
@@ -330,3 +337,16 @@ def _csv(value: str | None) -> list[str]:
     if not value:
         return []
     return [part for part in value.split(",") if part]
+
+
+def _json_list_csv(value: str | None) -> list[str]:
+    result: list[str] = []
+    for part in _csv(value):
+        try:
+            loaded = json.loads(part)
+        except json.JSONDecodeError:
+            loaded = []
+        for item in loaded:
+            if item not in result:
+                result.append(item)
+    return result

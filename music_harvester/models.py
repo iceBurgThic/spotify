@@ -130,6 +130,7 @@ class Candidate:
     score_components: dict[str, float] = field(default_factory=dict)
     bridge_source_score: float = 0.0
     bridge_match_types: list[str] = field(default_factory=list)
+    bridge_seed_sides: list[str] = field(default_factory=list)
     extraction_confidence: float = 1.0
     normalization_confidence: float = 1.0
     spotify_resolution_confidence: float = 0.0

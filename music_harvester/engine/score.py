@@ -38,6 +38,7 @@ def score_candidates(
             "multi_source_overlap": max(0, source_count - 1) * 6.0,
             "multi_platform_overlap": max(0, platform_count - 1) * 5.0,
             "bridge_cooccurrence": candidate.bridge_source_score,
+            "bridge_side_balance": 12.0 if len(candidate.bridge_seed_sides) > 1 else 0.0,
             "extraction_confidence": candidate.extraction_confidence * 3.0,
             "resolution_confidence": candidate.spotify_resolution_confidence,
             "novelty_score": 0.0,
@@ -113,6 +114,10 @@ def explain_score(candidate: Candidate) -> str:
         bits.append("has energy fit")
     if "bridge_tracks" in candidate.pools:
         bits.append("can bridge distant source worlds")
+    if len(candidate.bridge_seed_sides) > 1:
+        bits.append("has evidence from multiple seed sides")
+    elif candidate.bridge_seed_sides:
+        bits.append(f"represents {candidate.bridge_seed_sides[0]}")
     if "exact_all_seeds" in candidate.bridge_match_types:
         bits.append("came from a source that contains every bridge seed")
     elif candidate.bridge_source_score:

@@ -98,6 +98,7 @@ create table if not exists bridge_sources (
   match_type text not null,
   confidence_score real not null default 0,
   matched_seeds_json text not null,
+  seed_sides_json text not null default '[]',
   notes text,
   created_at text not null default current_timestamp
 );

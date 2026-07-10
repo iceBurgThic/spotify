@@ -443,6 +443,7 @@ def candidate_to_json(item: Candidate) -> dict:
         "score_components": item.score_components,
         "bridge_source_score": item.bridge_source_score,
         "bridge_match_types": item.bridge_match_types,
+        "bridge_seed_sides": item.bridge_seed_sides,
     }
 
 

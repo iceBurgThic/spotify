@@ -66,7 +66,7 @@ def bridge_discover(
         except (SourceUnavailable, ApiError, OSError, RuntimeError) as exc:
             store.add_error(source.name, str(exc), source_id)
             match_type, confidence, matched, notes = evaluate_unharvested_source(source, seeds, str(exc))
-            store.add_bridge_source(bridge_run_id, source_id, match_type, confidence, matched, notes)
+            store.add_bridge_source(bridge_run_id, source_id, match_type, confidence, matched, seed_sides(seeds, matched), notes)
             continue
 
         count = store.add_raw_tracks(source_id, harvested)
@@ -74,7 +74,7 @@ def bridge_discover(
         match_type, confidence, matched, notes = evaluate_bridge_source(source, harvested, seeds)
         if match_type == "exact_all_seeds":
             high_confidence += 1
-        store.add_bridge_source(bridge_run_id, source_id, match_type, confidence, matched, notes)
+        store.add_bridge_source(bridge_run_id, source_id, match_type, confidence, matched, seed_sides(seeds, matched), notes)
 
     write_bridge_sources_md(store, bridge_run_id)
     return BridgeResult(bridge_run_id, checked, ingested, high_confidence, discovery_notes)
@@ -82,15 +82,16 @@ def bridge_discover(
 
 def normalize_seeds(artists: list[str], tracks: list[str]) -> list[dict]:
     seeds: list[dict] = []
-    for artist in artists:
-        seeds.append({"type": "artist", "value": artist, "artist": artist, "key": artist.lower()})
-    for track in tracks:
+    for index, artist in enumerate(artists):
+        seeds.append({"type": "artist", "value": artist, "artist": artist, "key": artist.lower(), "side": f"seed_{index + 1}"})
+    for index, track in enumerate(tracks):
         parsed = split_artist_track(track)
+        side = f"seed_{len(seeds) + 1}"
         if parsed:
             artist, title = parsed
-            seeds.append({"type": "track", "value": track, "artist": artist, "title": title, "key": normalize_key(artist, title)})
+            seeds.append({"type": "track", "value": track, "artist": artist, "title": title, "key": normalize_key(artist, title), "side": side})
         else:
-            seeds.append({"type": "track", "value": track, "artist": "", "title": track, "key": track.lower()})
+            seeds.append({"type": "track", "value": track, "artist": "", "title": track, "key": track.lower(), "side": side})
     return seeds
 
 
@@ -184,7 +185,9 @@ def source_from_url(name: str, url: str, weight: float) -> SourceConfig | None:
 
 
 def evaluate_bridge_source(source: SourceConfig, tracks: list[RawTrack], seeds: list[dict]) -> tuple[str, float, list[str], str]:
-    matched = sorted({seed["value"] for seed in seeds if seed_matches_tracks(seed, tracks)})
+    track_matched = {seed["value"] for seed in seeds if seed_matches_tracks(seed, tracks)}
+    metadata_matched = {seed["value"] for seed in seeds if seed_text_match(seed, f"{source.name} {source.locator}")}
+    matched = sorted(track_matched | metadata_matched)
     title_score = bridge_title_score([track.playlist_title or "" for track in tracks] + [source.name])
     direct_bonus = 25.0 if source.name.startswith("bridge_user_") else 0.0
     density = bridge_density(tracks, seeds)
@@ -227,7 +230,14 @@ def seed_text_match(seed: dict, text: str) -> bool:
         return normalize_key("", seed["artist"]) in normalized_text
     artist = normalize_key("", seed.get("artist", ""))
     title = normalize_key("", seed.get("title", ""))
+    if artist and title:
+        return artist in normalized_text and title in normalized_text
     return bool((artist and artist in normalized_text) or (title and title in normalized_text))
+
+
+def seed_sides(seeds: list[dict], matched: list[str]) -> list[str]:
+    matched_set = set(matched)
+    return [seed["side"] for seed in seeds if seed["value"] in matched_set]
 
 
 def bridge_density(tracks: list[RawTrack], seeds: list[dict]) -> float:
@@ -251,13 +261,14 @@ def write_bridge_sources_md(store: Store, bridge_run_id: int) -> None:
     output = Path("output")
     output.mkdir(exist_ok=True)
     lines = [
-        "| Source | Platform | Match | Confidence | Matched Seeds | Notes |",
-        "| ------ | -------- | ----- | ---------- | ------------- | ----- |",
+        "| Source | Platform | Match | Confidence | Side(s) | Matched Seeds | Notes |",
+        "| ------ | -------- | ----- | ---------- | ------- | ------------- | ----- |",
     ]
     for row in rows:
         matched = ", ".join(json.loads(row["matched_seeds_json"] or "[]"))
+        sides = ", ".join(json.loads(row["seed_sides_json"] or "[]"))
         lines.append(
-            f"| {escape_md(row['name'] or 'unknown')} | {escape_md(row['platform'] or '')} | {escape_md(row['match_type'])} | {float(row['confidence_score']):.1f} | {escape_md(matched)} | {escape_md(row['notes'] or '')} |"
+            f"| {escape_md(row['name'] or 'unknown')} | {escape_md(row['platform'] or '')} | {escape_md(row['match_type'])} | {float(row['confidence_score']):.1f} | {escape_md(sides)} | {escape_md(matched)} | {escape_md(row['notes'] or '')} |"
         )
     (output / "bridge_sources.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
