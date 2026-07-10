@@ -39,6 +39,11 @@ def score_candidates(
             "texture_fit_score": title_relevance,
             "energy_fit_score": 0.0,
             "bridge_value_score": 2.5 if platform_count > 1 else 0.0,
+            "bridge_source_score": candidate.bridge_source_score,
+            "exact_seed_cooccurrence_score": 20.0 if "exact_all_seeds" in candidate.bridge_match_types else 0.0,
+            "near_bridge_score": 8.0 if "near_bridge" in candidate.bridge_match_types else 0.0,
+            "cross_platform_bridge_score": 5.0 if candidate.bridge_source_score and platform_count > 1 else 0.0,
+            "source_bridge_density": min(candidate.bridge_source_score / 10.0, 12.0),
             "contrast_value_score": 1.0 if source_count == 1 and platform_count == 1 else 0.0,
             "sequencing_value_score": 0.0,
             "user_feedback_score": 0.0,
@@ -105,6 +110,10 @@ def explain_score(candidate: Candidate) -> str:
         bits.append("has energy fit")
     if "bridge_tracks" in candidate.pools:
         bits.append("can bridge distant source worlds")
+    if "exact_all_seeds" in candidate.bridge_match_types:
+        bits.append("came from a source that contains every bridge seed")
+    elif candidate.bridge_source_score:
+        bits.append("came from a bridge candidate source")
     if "outer_ring" in candidate.pools:
         bits.append("sits in the outer ring rather than being an obvious anchor")
     if "wildcards" in candidate.pools:

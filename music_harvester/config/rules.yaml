@@ -60,6 +60,16 @@ modes:
       energy_match: 0.10
       wildcards: 0.10
 
+  bridge_discovery:
+    purpose: "bootstrap from distant seeds by raiding sources where humans already connect them"
+    mix:
+      anchors: 0.15
+      adjacent: 0.15
+      bridge_tracks: 0.30
+      deep_source: 0.20
+      outer_ring: 0.10
+      wildcards: 0.10
+
   heavy_motion:
     purpose: "forward-moving, high-energy playlist"
     mix:

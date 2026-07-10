@@ -31,6 +31,12 @@ def assign_pools(candidate: Candidate, taste_profile: dict) -> list[str]:
     if len(candidate.platforms) > 1:
         pools.add("bridge_tracks")
         pools.add("outer_ring")
+    if candidate.bridge_source_score >= 80:
+        pools.add("bridge_tracks")
+        pools.add("deep_source")
+    elif candidate.bridge_source_score >= 35:
+        pools.add("bridge_tracks")
+        pools.add("outer_ring")
     if any(word in text for word in texture_words(taste_profile)):
         pools.add("texture_match")
     if any(word in text for word in energy_words(taste_profile)):

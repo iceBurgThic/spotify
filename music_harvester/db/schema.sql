@@ -73,3 +73,21 @@ create table if not exists source_errors (
   message text not null,
   created_at text not null default current_timestamp
 );
+
+create table if not exists bridge_runs (
+  id integer primary key,
+  seed_type text not null,
+  seed_values_json text not null,
+  created_at text not null default current_timestamp
+);
+
+create table if not exists bridge_sources (
+  id integer primary key,
+  bridge_run_id integer not null references bridge_runs(id),
+  source_id integer references sources(id),
+  match_type text not null,
+  confidence_score real not null default 0,
+  matched_seeds_json text not null,
+  notes text,
+  created_at text not null default current_timestamp
+);

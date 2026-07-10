@@ -27,6 +27,10 @@ class SpotifyClient:
     def post(self, path_or_url: str, body: dict | None = None) -> dict:
         return request_json("POST", self._url(path_or_url), headers=self._headers(), body=body or {})
 
+    def search_playlists(self, query: str, limit: int = 10) -> list[dict]:
+        result = self.get("/search", params={"type": "playlist", "limit": limit, "q": query})
+        return [item for item in result.get("playlists", {}).get("items", []) if item]
+
     def _headers(self) -> dict[str, str]:
         token = self._valid_token()
         return {"Authorization": f"Bearer {token['access_token']}"}

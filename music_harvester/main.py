@@ -8,6 +8,7 @@ from pathlib import Path
 from music_harvester.config_loader import default_config_dir, load_yaml
 from music_harvester.db.store import Store
 from music_harvester.engine.dedupe import dedupe_candidates
+from music_harvester.engine.bridge import bridge_discover
 from music_harvester.engine.explain import markdown_table, rejected_markdown
 from music_harvester.engine.filter import apply_vetoes
 from music_harvester.engine.normalize import split_artist_track
@@ -50,7 +51,16 @@ def build_parser() -> argparse.ArgumentParser:
     generate = sub.add_parser("generate")
     generate.add_argument("--mode", default="balanced_discovery")
     generate.add_argument("--length", type=int)
+    generate.add_argument("--from-bridge", nargs="+")
+    generate.add_argument("--source-url", action="append", default=[])
     generate.set_defaults(func=cmd_generate)
+
+    bridge = sub.add_parser("bridge-discover")
+    bridge.add_argument("--artists", nargs="+", default=[])
+    bridge.add_argument("--tracks", nargs="+", default=[])
+    bridge.add_argument("--source-url", action="append", default=[])
+    bridge.add_argument("--search-limit", type=int, default=10)
+    bridge.set_defaults(func=cmd_bridge_discover)
 
     explain = sub.add_parser("explain")
     explain.add_argument("track")
@@ -113,12 +123,48 @@ def cmd_candidates(args: argparse.Namespace, store: Store) -> int:
 
 
 def cmd_generate(args: argparse.Namespace, store: Store) -> int:
-    selected, rejected, candidates = generate_playlist(store, Path(args.config_dir), args.mode, args.length)
-    write_outputs(selected, rejected, candidates)
+    mode = args.mode
+    if args.from_bridge:
+        result = bridge_discover(
+            store,
+            artists=args.from_bridge,
+            tracks=[],
+            source_urls=args.source_url,
+            search_limit=10,
+        )
+        print(
+            f"bridge discovery run {result.bridge_run_id}: checked {result.sources_checked}, "
+            f"ingested {result.sources_ingested}, high-confidence {result.high_confidence_sources}"
+        )
+        mode = "bridge_discovery"
+    selected, rejected, candidates = generate_playlist(store, Path(args.config_dir), mode, args.length)
+    write_outputs(selected, rejected, candidates, bridge=True if args.from_bridge else False)
     print(markdown_table(selected))
     print(f"saved {OUTPUT_DIR / 'candidates.json'}")
     print(f"saved {OUTPUT_DIR / 'final_playlist.md'}")
     print(f"saved {OUTPUT_DIR / 'rejected.md'}")
+    return 0
+
+
+def cmd_bridge_discover(args: argparse.Namespace, store: Store) -> int:
+    if not args.artists and not args.tracks:
+        print("Provide --artists or --tracks seeds.")
+        return 1
+    result = bridge_discover(
+        store,
+        artists=args.artists,
+        tracks=args.tracks,
+        source_urls=args.source_url,
+        search_limit=args.search_limit,
+    )
+    candidates, rejected = build_candidates(store, Path(args.config_dir), None)
+    write_bridge_outputs(candidates, rejected)
+    print(
+        f"bridge discovery run {result.bridge_run_id}: checked {result.sources_checked}, "
+        f"ingested {result.sources_ingested}, high-confidence {result.high_confidence_sources}"
+    )
+    print(f"saved {OUTPUT_DIR / 'bridge_sources.md'}")
+    print(f"saved {OUTPUT_DIR / 'bridge_candidates.json'}")
     return 0
 
 
@@ -209,7 +255,7 @@ def load_sources(path: Path) -> list[SourceConfig]:
     return [SourceConfig.from_dict(item) for item in raw]
 
 
-def write_outputs(selected: list[Candidate], rejected: list[Candidate], candidates: list[Candidate]) -> None:
+def write_outputs(selected: list[Candidate], rejected: list[Candidate], candidates: list[Candidate], bridge: bool = False) -> None:
     OUTPUT_DIR.mkdir(exist_ok=True)
     (OUTPUT_DIR / "candidates.json").write_text(
         json.dumps([candidate_to_json(item) for item in candidates], indent=2),
@@ -217,6 +263,24 @@ def write_outputs(selected: list[Candidate], rejected: list[Candidate], candidat
     )
     FINAL_JSON.write_text(json.dumps([candidate_to_json(item) for item in selected], indent=2), encoding="utf-8")
     (OUTPUT_DIR / "final_playlist.md").write_text(markdown_table(selected), encoding="utf-8")
+    (OUTPUT_DIR / "rejected.md").write_text(rejected_markdown(rejected), encoding="utf-8")
+    if bridge:
+        (OUTPUT_DIR / "bridge_playlist.md").write_text(markdown_table(selected), encoding="utf-8")
+        (OUTPUT_DIR / "bridge_candidates.json").write_text(
+            json.dumps([candidate_to_json(item) for item in candidates if item.bridge_source_score], indent=2),
+            encoding="utf-8",
+        )
+
+
+def write_bridge_outputs(candidates: list[Candidate], rejected: list[Candidate]) -> None:
+    OUTPUT_DIR.mkdir(exist_ok=True)
+    bridge_candidates = [item for item in candidates if item.bridge_source_score]
+    (OUTPUT_DIR / "bridge_candidates.json").write_text(
+        json.dumps([candidate_to_json(item) for item in bridge_candidates], indent=2),
+        encoding="utf-8",
+    )
+    if bridge_candidates:
+        (OUTPUT_DIR / "bridge_playlist.md").write_text(markdown_table(bridge_candidates[:40]), encoding="utf-8")
     (OUTPUT_DIR / "rejected.md").write_text(rejected_markdown(rejected), encoding="utf-8")
 
 
@@ -273,6 +337,8 @@ def candidate_to_json(item: Candidate) -> dict:
         "why": item.why,
         "pools": item.pools,
         "score_components": item.score_components,
+        "bridge_source_score": item.bridge_source_score,
+        "bridge_match_types": item.bridge_match_types,
     }
 
 

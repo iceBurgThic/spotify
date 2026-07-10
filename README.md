@@ -67,9 +67,36 @@ Write only after you like the preview:
 python -m music_harvester.main write-spotify --playlist-name "qrator found this"
 ```
 
-Default modes are neutral: `balanced_discovery`, `high_trust`, `weird_pull`, `bridge_builder`, and `heavy_motion`.
+Default modes are neutral: `balanced_discovery`, `high_trust`, `weird_pull`, `bridge_builder`, `bridge_discovery`, and `heavy_motion`.
 
 Tracks can belong to multiple pools at once: `anchors`, `adjacent`, `outer_ring`, `wildcards`, `bridge_tracks`, `texture_match`, `energy_match`, `deep_source`, `confirmed`, `rejected`, and `almost`. Genre can be metadata, but it is not the organizing principle.
+
+## Bridge Discovery
+
+Start from a strange pair and ask who already puts them in the same universe:
+
+```bash
+python -m music_harvester.main bridge-discover --artists "Freddie Gibbs" "Igorrr"
+python -m music_harvester.main generate --from-bridge "Freddie Gibbs" "Igorrr" --length 40
+```
+
+Most reliable path: pass candidate playlist URLs directly.
+
+```bash
+python -m music_harvester.main bridge-discover \
+  --artists "Freddie Gibbs" "Igorrr" \
+  --source-url "https://open.spotify.com/playlist/..."
+```
+
+Bridge output lands in:
+
+```text
+output/bridge_sources.md
+output/bridge_candidates.json
+output/bridge_playlist.md
+```
+
+Spotify playlist search is treated as candidate discovery only. The app inspects accessible playlists for actual seed co-occurrence before boosting them.
 
 ## Tiny Safety Note
 

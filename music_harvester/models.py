@@ -59,5 +59,7 @@ class Candidate:
     why: str
     pools: list[str] = field(default_factory=list)
     score_components: dict[str, float] = field(default_factory=dict)
+    bridge_source_score: float = 0.0
+    bridge_match_types: list[str] = field(default_factory=list)
     rejected: bool = False
     rejection_reason: str | None = None

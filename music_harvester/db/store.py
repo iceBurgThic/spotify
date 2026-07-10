@@ -119,12 +119,15 @@ class Store:
               group_concat(distinct s.name) as source_names,
               group_concat(distinct s.platform) as platforms,
               group_concat(distinct coalesce(tp.playlist_title, '')) as playlist_titles,
+              coalesce(max(bs.confidence_score), 0) as bridge_source_score,
+              group_concat(distinct bs.match_type) as bridge_match_types,
               sum(s.weight) as source_weight,
               count(distinct s.id) as source_count,
               count(distinct s.platform) as platform_count
             from normalized_tracks nt
             join track_provenance tp on tp.normalized_track_id = nt.id
             join sources s on s.id = tp.source_id
+            left join bridge_sources bs on bs.source_id = s.id
             group by nt.id
             """
         ).fetchall()
@@ -142,9 +145,59 @@ class Store:
                 platforms=_csv(row["platforms"]),
                 playlist_titles=[item for item in _csv(row["playlist_titles"]) if item],
                 why="",
+                bridge_source_score=float(row["bridge_source_score"] or 0),
+                bridge_match_types=_csv(row["bridge_match_types"]),
             )
             for row in rows
         ]
+
+    def create_bridge_run(self, seed_type: str, seed_values: list[str]) -> int:
+        cursor = self.conn.execute(
+            "insert into bridge_runs (seed_type, seed_values_json) values (?, ?)",
+            (seed_type, json.dumps(seed_values)),
+        )
+        self.conn.commit()
+        return int(cursor.lastrowid)
+
+    def add_bridge_source(
+        self,
+        bridge_run_id: int,
+        source_id: int | None,
+        match_type: str,
+        confidence_score: float,
+        matched_seeds: list[str],
+        notes: str | None = None,
+    ) -> None:
+        self.conn.execute(
+            """
+            insert into bridge_sources (
+              bridge_run_id, source_id, match_type, confidence_score, matched_seeds_json, notes
+            ) values (?, ?, ?, ?, ?, ?)
+            """,
+            (bridge_run_id, source_id, match_type, confidence_score, json.dumps(matched_seeds), notes),
+        )
+        self.conn.commit()
+
+    def bridge_sources_for_run(self, bridge_run_id: int) -> list[sqlite3.Row]:
+        return self.conn.execute(
+            """
+            select
+              bs.*,
+              s.name,
+              s.platform,
+              s.source_type,
+              s.url_or_username
+            from bridge_sources bs
+            left join sources s on s.id = bs.source_id
+            where bs.bridge_run_id = ?
+            order by bs.confidence_score desc
+            """,
+            (bridge_run_id,),
+        ).fetchall()
+
+    def latest_bridge_run_id(self) -> int | None:
+        row = self.conn.execute("select id from bridge_runs order by id desc limit 1").fetchone()
+        return int(row["id"]) if row else None
 
     def add_feedback(self, artist: str, title: str, rating: str, note: str | None = None) -> bool:
         key = normalize_key(artist, title)
