@@ -48,7 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
     candidates.set_defaults(func=cmd_candidates)
 
     generate = sub.add_parser("generate")
-    generate.add_argument("--mode", default="goblin_rap")
+    generate.add_argument("--mode", default="balanced_discovery")
     generate.add_argument("--length", type=int)
     generate.set_defaults(func=cmd_generate)
 
@@ -69,7 +69,7 @@ def build_parser() -> argparse.ArgumentParser:
     write.set_defaults(func=cmd_write_spotify)
 
     run = sub.add_parser("run")
-    run.add_argument("--mode", default="goblin_rap")
+    run.add_argument("--mode", default="balanced_discovery")
     run.add_argument("--length", type=int)
     run.add_argument("--playlist-name", default="qrator finds")
     run.add_argument("--public", action="store_true")
@@ -179,9 +179,11 @@ def cmd_run(args: argparse.Namespace, store: Store) -> int:
 def generate_playlist(store: Store, config_dir: Path, mode: str, length: int | None) -> tuple[list[Candidate], list[Candidate], list[Candidate]]:
     candidates, rejected = build_candidates(store, config_dir, None)
     rules = load_yaml(config_dir / "rules.yaml")
-    selected = sequence_playlist(candidates, rules, length)
+    selected = sequence_playlist(candidates, rules, length, mode)
+    mode_config = rules.get("modes", {}).get(mode, {})
+    purpose = mode_config.get("purpose", "a balanced playlist")
     for candidate in selected:
-        candidate.why = candidate.why.replace("Selected because", f"Selected for {mode} because", 1)
+        candidate.why = candidate.why.replace("Selected because", f"Selected for {mode} ({purpose}) because", 1)
     return selected, rejected, candidates
 
 
@@ -269,6 +271,8 @@ def candidate_to_json(item: Candidate) -> dict:
         "platforms": item.platforms,
         "playlist_titles": item.playlist_titles,
         "why": item.why,
+        "pools": item.pools,
+        "score_components": item.score_components,
     }
 
 

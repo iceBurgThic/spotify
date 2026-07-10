@@ -5,7 +5,7 @@ High quality nerd shit for making Spotify playlists from trusted human taste ins
 Two modes:
 
 - `npm start`: tiny manual Spotify playlist GUI.
-- `python -m music_harvester.main`: crate-digging playlist generator.
+- `python -m music_harvester.main`: source-driven playlist generator.
 
 ## Manual GUI
 
@@ -50,7 +50,7 @@ Then:
 
 ```bash
 python -m music_harvester.main ingest
-python -m music_harvester.main generate --mode goblin_rap --length 40
+python -m music_harvester.main generate --mode balanced_discovery --length 40
 ```
 
 It saves:
@@ -66,6 +66,10 @@ Write only after you like the preview:
 ```bash
 python -m music_harvester.main write-spotify --playlist-name "qrator found this"
 ```
+
+Default modes are neutral: `balanced_discovery`, `high_trust`, `weird_pull`, `bridge_builder`, and `heavy_motion`.
+
+Tracks can belong to multiple pools at once: `anchors`, `adjacent`, `outer_ring`, `wildcards`, `bridge_tracks`, `texture_match`, `energy_match`, `deep_source`, `confirmed`, `rejected`, and `almost`. Genre can be metadata, but it is not the organizing principle.
 
 ## Tiny Safety Note
 

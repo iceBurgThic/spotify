@@ -57,5 +57,7 @@ class Candidate:
     platforms: list[str]
     playlist_titles: list[str]
     why: str
+    pools: list[str] = field(default_factory=list)
+    score_components: dict[str, float] = field(default_factory=dict)
     rejected: bool = False
     rejection_reason: str | None = None

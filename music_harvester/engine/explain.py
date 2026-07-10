@@ -5,16 +5,17 @@ from music_harvester.models import Candidate
 
 def markdown_table(candidates: list[Candidate]) -> str:
     lines = [
-        "| # | Artist | Track | Score | Source(s) | Why |",
-        "| - | ------ | ----- | ----- | --------- | --- |",
+        "| # | Artist | Track | Score | Pool(s) | Source(s) | Why |",
+        "| - | ------ | ----- | ----- | ------- | --------- | --- |",
     ]
     for index, item in enumerate(candidates, 1):
         lines.append(
-            "| {idx} | {artist} | {title} | {score:.2f} | {sources} | {why} |".format(
+            "| {idx} | {artist} | {title} | {score:.2f} | {pools} | {sources} | {why} |".format(
                 idx=index,
                 artist=escape_md(item.artist),
                 title=escape_md(item.title),
                 score=item.score,
+                pools=escape_md(", ".join(item.pools)),
                 sources=escape_md(", ".join(item.sources)),
                 why=escape_md(item.why),
             )
