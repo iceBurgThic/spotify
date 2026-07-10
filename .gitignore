@@ -1,0 +1,4 @@
+.env
+.spotify-token.json
+node_modules/
+*.log

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Spotify Playlist Maker</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="topbar">
+        <div>
+          <h1>Spotify Playlist Maker</h1>
+          <p id="status">Checking connection...</p>
+        </div>
+        <a class="button" href="/login">Connect Spotify</a>
+      </section>
+
+      <section class="workspace">
+        <form id="playlist-form" class="panel">
+          <label>
+            Playlist name
+            <input id="playlist-name" name="name" placeholder="Friday night drift" required>
+          </label>
+          <label>
+            Description
+            <textarea id="playlist-description" name="description" rows="4">Created with a local Spotify playlist helper.</textarea>
+          </label>
+          <label class="check">
+            <input id="playlist-public" type="checkbox">
+            Public playlist
+          </label>
+          <button type="submit">Create playlist</button>
+          <p id="create-result" class="result"></p>
+        </form>
+
+        <section class="panel">
+          <form id="search-form" class="search">
+            <label>
+              Search tracks
+              <input id="search-query" placeholder="artist, song, mood, whatever">
+            </label>
+            <button type="submit">Search</button>
+          </form>
+          <div id="results" class="list"></div>
+        </section>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <h2>Tracks to add</h2>
+          <button id="clear" type="button">Clear</button>
+        </div>
+        <div id="selected" class="list empty">No tracks selected yet.</div>
+      </section>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
