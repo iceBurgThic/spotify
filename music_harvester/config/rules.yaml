@@ -1,0 +1,48 @@
+playlist_length: 40
+max_tracks_per_artist: 3
+min_distance_same_artist: 10
+max_tracks_per_single_source: 5
+max_tracks_per_single_playlist: 3
+recently_played_days_penalty: 14
+unknown_track_target_percent: 30
+wildcard_count: 2
+
+title_words:
+  high:
+    - grimy
+    - dust
+    - dusty
+    - underground
+    - rap
+    - weird
+    - goblin
+    - alchemist
+    - drums
+    - smoke
+    - raw
+    - dirty
+    - villain
+    - headnod
+    - crates
+  medium:
+    - favorites
+    - rotation
+    - driving
+    - work
+    - night
+    - heavy
+    - deep cuts
+  low:
+    - party
+    - throwback
+    - gym
+    - chill
+    - sad
+  reject:
+    - sleep
+    - study
+    - christmas
+    - wedding
+    - kids
+    - clean
+    - radio

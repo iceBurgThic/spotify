@@ -1,0 +1,17 @@
+- name: "trusted_rap_guy"
+  platform: "spotify"
+  type: "playlist"
+  url: "https://open.spotify.com/playlist/..."
+  weight: 1.6
+
+- name: "soundcloud_gremlin"
+  platform: "soundcloud"
+  type: "user_likes"
+  url: "https://soundcloud.com/..."
+  weight: 1.8
+
+- name: "local_notes"
+  platform: "text"
+  type: "track_list"
+  url: "music_harvester/config/tracks.txt"
+  weight: 1.0

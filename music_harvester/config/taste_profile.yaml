@@ -1,0 +1,48 @@
+anchors:
+  artists:
+    - Freddie Gibbs
+    - Ol' Dirty Bastard
+    - Sean Price
+    - Slaughter Rico
+    - Redman
+    - Danny Brown
+    - Maxo Kream
+    - Project Pat
+    - Meechy Darko
+
+traits:
+  positive:
+    - grimy voice
+    - animated delivery
+    - technically sharp
+    - funny but threatening
+    - raw but not amateur
+    - soulful production
+    - funky production
+    - dusty production
+    - sinister production
+    - slightly unhinged pocket
+    - strong personality
+  negative:
+    - boring competence
+    - generic Griselda overflow
+    - sleepy monotone underground rap
+    - lyrical-miracle backpack rap
+    - over-polished major label rap
+    - trap wallpaper
+    - TikTok-core
+    - technically similar but spiritually wrong
+
+veto:
+  artists: []
+  title_words:
+    - slowed
+    - sped up
+    - nightcore
+    - 8d audio
+    - karaoke
+    - clean version
+    - instrumental
+    - skit
+    - interlude
+    - live
