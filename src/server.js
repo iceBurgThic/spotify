@@ -75,6 +75,9 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && url.pathname === '/api/discover') {
       return discover(req, res);
     }
+    if (req.method === 'POST' && url.pathname === '/api/discover/playlist') {
+      return createDiscoveryPlaylist(req, res);
+    }
 
     return json(res, 404, { error: 'Not found.' });
   } catch (error) {
@@ -232,6 +235,43 @@ async function discover(req, res) {
     rmSync(dbPath, { force: true });
   } catch {}
   return json(res, 200, response);
+}
+
+async function createDiscoveryPlaylist(req, res) {
+  const body = await readJson(req);
+  const name = body.name?.trim() || `qrator ${new Date().toISOString().slice(0, 10)}`;
+  const isPublic = Boolean(body.public);
+  const finalPath = path.join(root, 'output', 'final_playlist.json');
+  if (!existsSync(finalPath)) return json(res, 400, { error: 'No discovery shortlist found yet.' });
+
+  const items = JSON.parse(await readFile(finalPath, 'utf8'));
+  const uris = items.map((item) => item.spotify_uri).filter(Boolean);
+  if (uris.length === 0) {
+    return json(res, 400, { error: 'No Spotify-resolved tracks found in the current shortlist.' });
+  }
+
+  const user = await spotifyFetch('https://api.spotify.com/v1/me');
+  const playlist = await spotifyFetch(`https://api.spotify.com/v1/users/${encodeURIComponent(user.id)}/playlists`, {
+    method: 'POST',
+    body: JSON.stringify({
+      name,
+      description: 'Created by qrator from a discovery shortlist.',
+      public: isPublic,
+    }),
+  });
+
+  for (let i = 0; i < uris.length; i += 100) {
+    await spotifyFetch(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks`, {
+      method: 'POST',
+      body: JSON.stringify({ uris: uris.slice(i, i + 100) }),
+    });
+  }
+
+  return json(res, 201, {
+    playlist,
+    added: uris.length,
+    unresolved: items.length - uris.length,
+  });
 }
 
 function parseDiscoveryInput(input) {

@@ -10,6 +10,7 @@ const discoverOutput = document.querySelector('#discover-output');
 
 const selected = new Map();
 let latestDiscoverySeeds = [];
+let latestDiscoveryHasPlaylist = false;
 
 await refreshStatus();
 renderSelected();
@@ -42,6 +43,7 @@ discoverForm.addEventListener('submit', async (event) => {
       body: JSON.stringify({ query, length }),
     });
     latestDiscoverySeeds = data.seeds || [];
+    latestDiscoveryHasPlaylist = Boolean(data.playlist);
     renderDiscovery(data);
   } catch (error) {
     discoverOutput.textContent = error.message;
@@ -123,13 +125,39 @@ function renderDiscovery(data) {
   const seedButton = latestDiscoverySeeds.length
     ? '<button id="use-shortlist-seeds" type="button">Use shortlist as seeds</button>'
     : '';
+  const playlistControls = latestDiscoveryHasPlaylist
+    ? `<form id="discovery-playlist-form" class="inline-playlist">
+        <input id="discovery-playlist-name" placeholder="Playlist name" value="qrator discovery">
+        <label class="check"><input id="discovery-playlist-public" type="checkbox"> Public</label>
+        <button type="submit">Make Spotify playlist</button>
+        <span id="discovery-playlist-result" class="result"></span>
+      </form>`
+    : '';
   discoverOutput.innerHTML = seedButton + sections.map(([title, text]) => {
     return `<section><h3>${escapeHtml(title)}</h3><pre>${escapeHtml(text.trim() || 'No output.')}</pre></section>`;
-  }).join('');
+  }).join('') + playlistControls;
 
   document.querySelector('#use-shortlist-seeds')?.addEventListener('click', () => {
     document.querySelector('#discover-query').value = latestDiscoverySeeds.join('\n');
     document.querySelector('#discover-query').focus();
+  });
+
+  document.querySelector('#discovery-playlist-form')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const result = document.querySelector('#discovery-playlist-result');
+    result.textContent = 'Creating...';
+    try {
+      const data = await api('/api/discover/playlist', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: document.querySelector('#discovery-playlist-name').value,
+          public: document.querySelector('#discovery-playlist-public').checked,
+        }),
+      });
+      result.innerHTML = `<a href="${data.playlist.external_urls.spotify}" target="_blank" rel="noreferrer">Open playlist</a> (${data.added} tracks)`;
+    } catch (error) {
+      result.textContent = error.message;
+    }
   });
 }
 

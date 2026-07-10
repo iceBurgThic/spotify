@@ -207,6 +207,13 @@ form,
   justify-self: start;
 }
 
+.inline-playlist {
+  display: grid;
+  grid-template-columns: minmax(180px, 280px) auto auto 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
 .markdown-output h3 {
   margin: 0 0 8px;
   font-size: 0.95rem;
@@ -237,6 +244,10 @@ code {
   }
 
   .actions {
+    grid-template-columns: 1fr;
+  }
+
+  .inline-playlist {
     grid-template-columns: 1fr;
   }
 }
