@@ -27,6 +27,7 @@ def request_json(
     body: dict[str, Any] | None = None,
     form: dict[str, Any] | None = None,
     polite_delay: float = 0.12,
+    retries: int = 2,
 ) -> dict[str, Any]:
     if params:
         separator = "&" if "?" in url else "?"
@@ -41,19 +42,36 @@ def request_json(
         data = urlencode(form).encode("utf-8")
         final_headers.setdefault("Content-Type", "application/x-www-form-urlencoded")
 
-    req = Request(url, data=data, headers=final_headers, method=method.upper())
-    try:
-        with urlopen(req, timeout=30) as response:
-            payload = response.read().decode("utf-8")
-            time.sleep(polite_delay)
-            return json.loads(payload) if payload else {}
-    except HTTPError as exc:
-        message = exc.read().decode("utf-8", errors="replace")
+    for attempt in range(retries + 1):
+        req = Request(url, data=data, headers=final_headers, method=method.upper())
         try:
-            parsed = json.loads(message)
-            message = parsed.get("error_description") or parsed.get("message") or parsed.get("error", {}).get("message") or message
-        except json.JSONDecodeError:
-            pass
-        raise ApiError(exc.code, message) from exc
-    except URLError as exc:
-        raise ApiError(0, str(exc.reason)) from exc
+            with urlopen(req, timeout=30) as response:
+                payload = response.read().decode("utf-8")
+                time.sleep(polite_delay)
+                return json.loads(payload) if payload else {}
+        except HTTPError as exc:
+            if exc.code == 429 and attempt < retries:
+                retry_after = retry_after_seconds(exc)
+                time.sleep(retry_after)
+                continue
+            message = exc.read().decode("utf-8", errors="replace")
+            try:
+                parsed = json.loads(message)
+                message = parsed.get("error_description") or parsed.get("message") or parsed.get("error", {}).get("message") or message
+            except json.JSONDecodeError:
+                pass
+            raise ApiError(exc.code, message) from exc
+        except URLError as exc:
+            raise ApiError(0, str(exc.reason)) from exc
+
+    raise ApiError(0, "request retry loop exited unexpectedly")
+
+
+def retry_after_seconds(exc: HTTPError) -> float:
+    raw = exc.headers.get("Retry-After")
+    if not raw:
+        return 2.0
+    try:
+        return max(1.0, min(float(raw), 30.0))
+    except ValueError:
+        return 2.0

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import base64
+import hashlib
+import html
 import json
 import os
+import random
 import re
 import time
 from pathlib import Path
@@ -16,6 +19,8 @@ from music_harvester.sources.base import SourceAdapter, SourceUnavailable
 
 PLAYLIST_RE = re.compile(r"playlist/([A-Za-z0-9]+)")
 PLAYLIST_TRACK_META_RE = re.compile(r'<meta\s+name="music:song"\s+content="https://open\.spotify\.com/track/([A-Za-z0-9]+)"')
+SPOTIFY_PLAYLIST_SAMPLE_SIZE = 40
+TITLE_RE = re.compile(r"<title>(.*?)</title>", re.IGNORECASE | re.DOTALL)
 USER_RE = re.compile(r"user/([^/?]+)")
 
 
@@ -23,8 +28,22 @@ class SpotifyClient:
     def __init__(self, token_path: Path = Path(".spotify-token.json")):
         self.token_path = token_path
 
-    def get(self, path_or_url: str, params: dict | None = None) -> dict:
-        return request_json("GET", self._url(path_or_url), headers=self._headers(), params=params)
+    def get(
+        self,
+        path_or_url: str,
+        params: dict | None = None,
+        *,
+        polite_delay: float = 0.12,
+        retries: int = 2,
+    ) -> dict:
+        return request_json(
+            "GET",
+            self._url(path_or_url),
+            headers=self._headers(),
+            params=params,
+            polite_delay=polite_delay,
+            retries=retries,
+        )
 
     def post(self, path_or_url: str, body: dict | None = None) -> dict:
         return request_json("POST", self._url(path_or_url), headers=self._headers(), body=body or {})
@@ -92,17 +111,32 @@ class SpotifySource(SourceAdapter):
         raise SourceUnavailable(f"Unsupported Spotify source type: {self.source.source_type}")
 
     def _playlist_tracks(self, playlist_id: str) -> list[RawTrack]:
-        playlist = self.client.get(f"/playlists/{playlist_id}", params={"fields": "name"})
-        playlist_title = playlist.get("name") or self.source.name
+        try:
+            playlist = self.client.get(f"/playlists/{playlist_id}", params={"fields": "name"})
+            playlist_title = playlist.get("name") or self.source.name
+        except ApiError as exc:
+            if exc.status in {403, 404, 429}:
+                return self._playlist_tracks_from_public_page(playlist_id, self.source.name)
+            raise
         tracks: list[RawTrack] = []
         url = f"/playlists/{playlist_id}/items"
         params = {"limit": 50}
         position = 0
+        try:
+            first_page = self.client.get(url, params={"limit": 1})
+        except ApiError as exc:
+            if exc.status in {403, 404, 429}:
+                return self._playlist_tracks_from_public_page(playlist_id, playlist_title)
+            raise
+        total = int(first_page.get("total") or 0)
+        if total > SPOTIFY_PLAYLIST_SAMPLE_SIZE:
+            return self._sampled_playlist_tracks(playlist_id, playlist_title, total)
+
         while url:
             try:
                 page = self.client.get(url, params=params)
             except ApiError as exc:
-                if exc.status == 403:
+                if exc.status in {403, 404, 429}:
                     return self._playlist_tracks_from_public_page(playlist_id, playlist_title)
                 raise
             params = None
@@ -115,13 +149,42 @@ class SpotifySource(SourceAdapter):
             url = page.get("next")
         return tracks
 
+    def _sampled_playlist_tracks(self, playlist_id: str, playlist_title: str, total: int) -> list[RawTrack]:
+        tracks: list[RawTrack] = []
+        for position in sampled_positions(total, SPOTIFY_PLAYLIST_SAMPLE_SIZE, playlist_id):
+            try:
+                page = self.client.get(
+                    f"/playlists/{playlist_id}/items",
+                    params={"limit": 1, "offset": position},
+                    polite_delay=0.75,
+                    retries=4,
+                )
+            except ApiError as exc:
+                if exc.status == 429 and tracks:
+                    return tracks
+                if exc.status in {403, 404}:
+                    return self._playlist_tracks_from_public_page(playlist_id, playlist_title)
+                raise
+            item = (page.get("items") or [{}])[0]
+            raw = self._raw_track(item.get("track") or {}, playlist_title, position + 1, "playlist_sample")
+            if raw:
+                tracks.append(raw)
+        return tracks
+
     def _playlist_tracks_from_public_page(self, playlist_id: str, playlist_title: str) -> list[RawTrack]:
         html = fetch_spotify_playlist_page(playlist_id)
+        playlist_title = playlist_title_from_html(html) or playlist_title
         track_ids = list(dict.fromkeys(PLAYLIST_TRACK_META_RE.findall(html)))
+        track_ids = sampled_track_ids(track_ids, SPOTIFY_PLAYLIST_SAMPLE_SIZE, playlist_id)
         tracks: list[RawTrack] = []
         position = 0
         for track_id in track_ids:
-            track = self.client.get(f"/tracks/{track_id}")
+            try:
+                track = self.client.get(f"/tracks/{track_id}", polite_delay=0.75, retries=4)
+            except ApiError as exc:
+                if exc.status == 429 and tracks:
+                    return tracks
+                raise
             position += 1
             raw = self._raw_track(track, playlist_title, position, "playlist_public_page")
             if raw:
@@ -180,6 +243,35 @@ def fetch_spotify_playlist_page(playlist_id: str) -> str:
     )
     with urlopen(request, timeout=30) as response:
         return response.read().decode("utf-8", errors="replace")
+
+
+def playlist_title_from_html(body: str) -> str | None:
+    match = TITLE_RE.search(body)
+    if not match:
+        return None
+    title = html.unescape(match.group(1)).strip()
+    return title.removesuffix(" | Spotify").strip() or None
+
+
+def sampled_track_ids(track_ids: list[str], sample_size: int, key: str) -> list[str]:
+    if len(track_ids) <= sample_size:
+        return track_ids
+
+    return [track_ids[index] for index in sampled_positions(len(track_ids), sample_size, key)]
+
+
+def sampled_positions(total: int, sample_size: int, key: str) -> list[int]:
+    if total <= sample_size:
+        return list(range(total))
+
+    seed = int(hashlib.sha256(key.encode("utf-8")).hexdigest()[:16], 16)
+    rng = random.Random(seed)
+    sampled: list[int] = []
+    for index in range(sample_size):
+        start = round(index * total / sample_size)
+        end = round((index + 1) * total / sample_size)
+        sampled.append(rng.randrange(start, max(start + 1, end)))
+    return sampled
 
 
 def extract_user_id(value: str) -> str | None:
