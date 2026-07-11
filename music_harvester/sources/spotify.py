@@ -7,6 +7,7 @@ import re
 import time
 from pathlib import Path
 from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 
 from music_harvester.http import ApiError, request_json
 from music_harvester.models import RawTrack, SourceConfig
@@ -14,6 +15,7 @@ from music_harvester.sources.base import SourceAdapter, SourceUnavailable
 
 
 PLAYLIST_RE = re.compile(r"playlist/([A-Za-z0-9]+)")
+PLAYLIST_TRACK_META_RE = re.compile(r'<meta\s+name="music:song"\s+content="https://open\.spotify\.com/track/([A-Za-z0-9]+)"')
 USER_RE = re.compile(r"user/([^/?]+)")
 
 
@@ -93,37 +95,58 @@ class SpotifySource(SourceAdapter):
         playlist = self.client.get(f"/playlists/{playlist_id}", params={"fields": "name"})
         playlist_title = playlist.get("name") or self.source.name
         tracks: list[RawTrack] = []
-        url = f"/playlists/{playlist_id}/tracks"
-        params = {"limit": 100}
+        url = f"/playlists/{playlist_id}/items"
+        params = {"limit": 50}
         position = 0
         while url:
-            page = self.client.get(url, params=params)
+            try:
+                page = self.client.get(url, params=params)
+            except ApiError as exc:
+                if exc.status == 403:
+                    return self._playlist_tracks_from_public_page(playlist_id, playlist_title)
+                raise
             params = None
             for item in page.get("items", []):
                 position += 1
                 track = item.get("track") or {}
-                if not track or track.get("is_local"):
-                    continue
-                artists = track.get("artists") or []
-                if not artists:
-                    continue
-                tracks.append(
-                    RawTrack(
-                        source_name=self.source.name,
-                        platform="spotify",
-                        artist=artists[0].get("name", ""),
-                        title=track.get("name", ""),
-                        album=(track.get("album") or {}).get("name"),
-                        platform_track_id=track.get("id"),
-                        url=(track.get("external_urls") or {}).get("spotify"),
-                        payload={"spotify_uri": track.get("uri"), "track": track},
-                        source_context="playlist",
-                        playlist_title=playlist_title,
-                        position=position,
-                    )
-                )
+                raw = self._raw_track(track, playlist_title, position, "playlist")
+                if raw:
+                    tracks.append(raw)
             url = page.get("next")
         return tracks
+
+    def _playlist_tracks_from_public_page(self, playlist_id: str, playlist_title: str) -> list[RawTrack]:
+        html = fetch_spotify_playlist_page(playlist_id)
+        track_ids = list(dict.fromkeys(PLAYLIST_TRACK_META_RE.findall(html)))
+        tracks: list[RawTrack] = []
+        position = 0
+        for track_id in track_ids:
+            track = self.client.get(f"/tracks/{track_id}")
+            position += 1
+            raw = self._raw_track(track, playlist_title, position, "playlist_public_page")
+            if raw:
+                tracks.append(raw)
+        return tracks
+
+    def _raw_track(self, track: dict, playlist_title: str, position: int, source_context: str) -> RawTrack | None:
+        if not track or track.get("is_local"):
+            return None
+        artists = track.get("artists") or []
+        if not artists:
+            return None
+        return RawTrack(
+            source_name=self.source.name,
+            platform="spotify",
+            artist=artists[0].get("name", ""),
+            title=track.get("name", ""),
+            album=(track.get("album") or {}).get("name"),
+            platform_track_id=track.get("id"),
+            url=(track.get("external_urls") or {}).get("spotify"),
+            payload={"spotify_uri": track.get("uri"), "track": track},
+            source_context=source_context,
+            playlist_title=playlist_title,
+            position=position,
+        )
 
     def _user_playlists(self, user_id: str) -> list[RawTrack]:
         tracks: list[RawTrack] = []
@@ -148,6 +171,15 @@ def extract_playlist_id(value: str) -> str | None:
     if value and "/" not in value and "spotify" not in value:
         return value
     return None
+
+
+def fetch_spotify_playlist_page(playlist_id: str) -> str:
+    request = Request(
+        f"https://open.spotify.com/playlist/{playlist_id}",
+        headers={"User-Agent": "Mozilla/5.0"},
+    )
+    with urlopen(request, timeout=30) as response:
+        return response.read().decode("utf-8", errors="replace")
 
 
 def extract_user_id(value: str) -> str | None:

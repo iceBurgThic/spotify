@@ -25,6 +25,7 @@ const config = {
 const scopes = [
   'playlist-modify-private',
   'playlist-modify-public',
+  'playlist-read-private',
   'user-read-private',
 ].join(' ');
 

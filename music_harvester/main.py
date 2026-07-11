@@ -395,15 +395,14 @@ def write_spotify_playlist(selected: list[Candidate], playlist_name: str, public
 
     client = SpotifyClient()
     resolver = SpotifyResolver(client)
-    me = client.get("/me")
     playlist = client.post(
-        f"/users/{me['id']}/playlists",
+        "/me/playlists",
         {"name": playlist_name, "description": "Distilled by qrator from trusted human sources.", "public": public},
     )
     uris = [resolver.resolve(item).spotify_uri for item in selected]
     uris = [uri for uri in uris if uri]
     for index in range(0, len(uris), 100):
-        client.post(f"/playlists/{playlist['id']}/tracks", {"uris": uris[index : index + 100]})
+        client.post(f"/playlists/{playlist['id']}/items", {"uris": uris[index : index + 100]})
     return playlist["id"]
 
 
