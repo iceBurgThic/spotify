@@ -139,7 +139,7 @@ form,
 
 .actions {
   display: grid;
-  grid-template-columns: minmax(90px, 140px) auto;
+  grid-template-columns: minmax(90px, 140px) auto auto;
   gap: 12px;
   align-items: end;
   justify-content: start;
@@ -149,6 +149,10 @@ form,
   grid-template-columns: 1fr auto;
   align-items: center;
   margin-bottom: 12px;
+}
+
+.selected-head {
+  margin-top: 18px;
 }
 
 .list {

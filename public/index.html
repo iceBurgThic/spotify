@@ -43,6 +43,12 @@
             <button type="submit">Search</button>
           </form>
           <div id="results" class="list"></div>
+
+          <div class="section-head selected-head">
+            <h2>Tracks to add</h2>
+            <button id="clear" type="button">Clear</button>
+          </div>
+          <div id="selected" class="list empty">No tracks selected yet.</div>
         </section>
       </section>
 
@@ -57,18 +63,11 @@
               Length
               <input id="discover-length" type="number" min="5" max="60" value="30">
             </label>
-            <button type="submit">Discover</button>
+            <button id="distill-sources" type="submit" value="distill">Distill sources</button>
+            <button id="bridge-discover" type="submit" value="bridge">Bridge discover</button>
           </div>
         </form>
         <div id="discover-output" class="markdown-output empty">No discovery run yet.</div>
-      </section>
-
-      <section class="panel">
-        <div class="section-head">
-          <h2>Tracks to add</h2>
-          <button id="clear" type="button">Clear</button>
-        </div>
-        <div id="selected" class="list empty">No tracks selected yet.</div>
       </section>
     </main>
 
