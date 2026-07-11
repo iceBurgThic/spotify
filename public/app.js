@@ -33,22 +33,9 @@ discoverForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   const query = document.querySelector('#discover-query').value.trim();
   const length = Number(document.querySelector('#discover-length').value || 30);
-  const mode = event.submitter?.value || 'distill';
   if (!query) return;
 
-  discoverOutput.className = 'markdown-output empty';
-  discoverOutput.textContent = mode === 'bridge' ? 'Bridge discovering...' : 'Distilling sources...';
-  try {
-    const data = await api('/api/discover', {
-      method: 'POST',
-      body: JSON.stringify({ query, length, mode }),
-    });
-    latestDiscoverySeeds = data.seeds || [];
-    latestDiscoveryHasPlaylist = Boolean(data.playlist);
-    renderDiscovery(data);
-  } catch (error) {
-    discoverOutput.textContent = error.message;
-  }
+  await runDiscovery(query, length, 'distill');
 });
 
 playlistForm.addEventListener('submit', async (event) => {
@@ -117,21 +104,21 @@ function renderSelected() {
 
 function renderDiscovery(data) {
   const sections = [];
-  const playlistTitle = data.mode === 'bridge' ? 'Bridge Playlist' : 'Source Shortlist';
+  const playlistTitle = data.mode === 'discover' ? 'Discovery Playlist' : 'Source Shortlist';
   if (data.playlist) sections.push([playlistTitle, data.playlist]);
-  if (data.sources) sections.push(['Bridge Sources', data.sources]);
+  if (data.sources) sections.push(['Discovery Sources', data.sources]);
   if (data.unresolved) sections.push(['Unresolved', data.unresolved]);
   if (data.generate_stdout) sections.push(['Run Log', data.generate_stdout]);
 
   discoverOutput.className = 'markdown-output';
   const seedButton = latestDiscoverySeeds.length
-    ? '<button id="use-shortlist-seeds" type="button">Use shortlist for bridge discovery</button>'
+    ? '<button id="use-shortlist-seeds" type="button">Discover from shortlist</button>'
     : '';
   const playlistControls = latestDiscoveryHasPlaylist
     ? `<form id="discovery-playlist-form" class="inline-playlist">
         <input id="discovery-playlist-name" placeholder="Playlist name" value="qrator discovery">
         <label class="check"><input id="discovery-playlist-public" type="checkbox"> Public</label>
-        <button type="submit">Make Spotify playlist</button>
+        <button type="submit">Write to Spotify</button>
         <span id="discovery-playlist-result" class="result"></span>
       </form>`
     : '';
@@ -140,8 +127,9 @@ function renderDiscovery(data) {
   }).join('') + playlistControls;
 
   document.querySelector('#use-shortlist-seeds')?.addEventListener('click', () => {
-    document.querySelector('#discover-query').value = latestDiscoverySeeds.join('\n');
-    document.querySelector('#discover-query').focus();
+    const query = latestDiscoverySeeds.join('\n');
+    document.querySelector('#discover-query').value = query;
+    runDiscovery(query, Number(document.querySelector('#discover-length').value || 30), 'discover');
   });
 
   document.querySelector('#discovery-playlist-form')?.addEventListener('submit', async (event) => {
@@ -161,6 +149,22 @@ function renderDiscovery(data) {
       result.textContent = error.message;
     }
   });
+}
+
+async function runDiscovery(query, length, mode) {
+  discoverOutput.className = 'markdown-output empty';
+  discoverOutput.textContent = mode === 'discover' ? 'Discovering from shortlist...' : 'Discovering...';
+  try {
+    const data = await api('/api/discover', {
+      method: 'POST',
+      body: JSON.stringify({ query, length, mode }),
+    });
+    latestDiscoverySeeds = data.seeds || [];
+    latestDiscoveryHasPlaylist = Boolean(data.playlist);
+    renderDiscovery(data);
+  } catch (error) {
+    discoverOutput.textContent = error.message;
+  }
 }
 
 function trackRow(track, action, onClick) {

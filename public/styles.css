@@ -139,7 +139,7 @@ form,
 
 .actions {
   display: grid;
-  grid-template-columns: minmax(90px, 140px) auto auto;
+  grid-template-columns: minmax(90px, 140px) auto;
   gap: 12px;
   align-items: end;
   justify-content: start;

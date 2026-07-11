@@ -179,7 +179,7 @@ async function discover(req, res) {
   const body = await readJson(req);
   const input = String(body.query || '').trim();
   const length = Math.max(5, Math.min(Number(body.length || 30), 60));
-  const mode = body.mode === 'bridge' ? 'bridge' : 'distill';
+  const mode = body.mode === 'discover' ? 'discover' : 'distill';
   if (!input) return json(res, 400, { error: 'Missing discovery query.' });
 
   const parsed = parseDiscoveryInput(input);
@@ -198,7 +198,7 @@ async function discover(req, res) {
     parsed.seedType,
     ...seedArgs,
     '--search-limit',
-    mode === 'bridge' && parsed.seeds.length >= 2 ? '10' : '0',
+    mode === 'discover' && parsed.seeds.length >= 2 ? '10' : '0',
   ];
   for (const sourceUrl of parsed.urls) bridgeArgs.push('--source-url', sourceUrl);
   if (parsed.text) bridgeArgs.push('--text', parsed.text);
@@ -210,7 +210,7 @@ async function discover(req, res) {
     dbPath,
     'generate',
     '--mode',
-    mode === 'bridge' && parsed.seeds.length >= 2 ? 'bridge_discovery' : 'balanced_discovery',
+    mode === 'discover' && parsed.seeds.length >= 2 ? 'bridge_discovery' : 'balanced_discovery',
     '--length',
     String(length),
   ];
